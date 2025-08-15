@@ -4,6 +4,7 @@ pipeline {
   environment {
     APP_NAME = 'demo'
     IMAGE_TAG = "demo:${env.BUILD_NUMBER}"
+    M2_CACHE_VOL = 'm2'  // кеш Maven-репозитория
   }
 
   options { timestamps() }
@@ -13,9 +14,15 @@ pipeline {
       steps { checkout scm }
     }
 
-    stage('Build & Test (Maven)') {
+    stage('Build & Test (Maven in Docker)') {
       steps {
-        sh 'mvn -B -ntp -DskipTests=false test package'
+        sh '''
+          docker run --rm \
+            -v "$PWD":/app -w /app \
+            -v ${M2_CACHE_VOL}:/root/.m2 \
+            maven:3.9-eclipse-temurin-17 \
+            mvn -B -ntp -DskipTests=false clean test package
+        '''
       }
       post {
         always {
@@ -31,7 +38,7 @@ pipeline {
       }
     }
 
-    stage('Run Container (Smoke)') {
+    stage('Run Container (Smoke)) {
       steps {
         sh "docker run -d --rm --name ${APP_NAME}-smoke -p 18080:8080 ${IMAGE_TAG}"
         sh "sleep 5 && curl -fsS http://localhost:18080/ | tee smoke.out"
