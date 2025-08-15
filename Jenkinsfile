@@ -38,7 +38,7 @@ pipeline {
       }
     }
 
-    stage('Run Container (Smoke)) {
+    stage('Run Container (Smoke)') {
       steps {
         sh "docker run -d --rm --name ${APP_NAME}-smoke -p 18080:8080 ${IMAGE_TAG}"
         sh "sleep 5 && curl -fsS http://localhost:18080/ | tee smoke.out"
