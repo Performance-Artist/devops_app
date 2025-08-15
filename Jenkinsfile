@@ -48,7 +48,7 @@ pipeline {
     }
 
     stage('Build Docker Image') {
-      steps { sh 'DOCKER_BUILDKIT=1 docker build -t ${IMAGE_TAG} .' }
+      steps { sh 'docker build -t ${IMAGE_TAG} .' }
     }
 
     stage('Run Container (Smoke)') {
