@@ -12,20 +12,36 @@ pipeline {
     stage('Build & Test (Maven in Docker)') {
       steps {
         sh '''
+          set -e
           echo "WORKSPACE=$WORKSPACE"
           ls -la "$WORKSPACE"
-        '''
-        sh '''
-          docker run --rm \
-            -v "$WORKSPACE":/app -w /app \
-            -v ${M2_CACHE_VOL}:/root/.m2 \
+
+          # Чистим/готовим локальный target чтобы junit/artifacts потом нашли файлы
+          rm -rf "$WORKSPACE/target" || true
+          mkdir -p "$WORKSPACE/target"
+
+          # Если остался старый контейнер — удалим
+          docker rm -f maven-build || true
+
+          # Передаём содержимое WORKSPACE внутрь контейнера через stdin (tar),
+          # собираем, а затем копируем готовый target/ обратно
+          tar -C "$WORKSPACE" -cf - . | docker run --name maven-build -i \
+            -v m2:/root/.m2 \
             maven:3.9-eclipse-temurin-17 \
-            mvn -B -ntp -DskipTests=false clean test package
+            sh -lic 'set -e; mkdir -p /app && cd /app && tar -xf - && mvn -B -ntp -DskipTests=false clean test package && ls -la target'
+
+          # Копируем артефакты из контейнера в рабочую директорию Jenkins
+          docker cp maven-build:/app/target "$WORKSPACE/"
+
+          # Чистим контейнер
+          docker rm -f maven-build || true
+
+          ls -la "$WORKSPACE/target"
         '''
       }
       post {
         always {
-          junit allowEmptyResults: true, testResults: 'target/surefire-reports/*.xml'
+          junit allowEmptyResults: false, testResults: 'target/surefire-reports/*.xml'
           archiveArtifacts artifacts: 'target/*.jar', fingerprint: true, onlyIfSuccessful: true
         }
       }
